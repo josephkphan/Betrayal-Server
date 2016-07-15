@@ -1,0 +1,27 @@
+{
+  "name": "betrayal",
+  "version": "1.0.0",
+  "description": "Node.js server for Betrayal.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roophanxp/Betrayal.git"
+  },
+  "author": "JNV Games (Vincent Wang and Joey Phan)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/roophanxp/Betrayal/issues"
+  },
+  "homepage": "https://github.com/roophanxp/Betrayal#readme",
+  "dependencies": {
+    "Math": "0.0.1-security",
+    "express": "^4.14.0",
+    "jsonfile": "^2.3.1",
+    "math": "0.0.3",
+    "mathjs": "^3.3.0",
+    "socket.io": "^1.4.8"
+  }
+}
