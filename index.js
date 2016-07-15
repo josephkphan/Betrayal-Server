@@ -91,16 +91,15 @@ function getRandomInt(min, max) {
 // Leave room with socketID, sudden disconnect
 function leaveRoomBySocket(socketID) {
 	jsonfile.readFile(getRoomFileName(sockets[socketID]), function(err, data) {
-		var counter = 0, finalIndex;
+		var counter = 0;
 
 		data.players.forEach(function(player) {
-			if (player.socketID != socket.id) {
-				counter++;
+			if (player.socketID == socketID) {
+				data.players.splice(counter, 1);
 			} else {
-				finalIndex = counter;
+				counter++;
 			}
 		});
-		data.players.splice(finalIndex, 1);
 		writeFile(roomNum, data);
 	});
 }
@@ -108,16 +107,16 @@ function leaveRoomBySocket(socketID) {
 // Leave room with playerID, formal leaving
 function leaveRoom(playerID, roomNum) {
 	jsonfile.readFile(getRoomFileName(roomNum), function(err, data) {
-		var counter = 0, finalIndex;
+		var counter = 0;
 
 		data.players.forEach(function(player) {
-			if (player.id != playerID.id) {
-				counter++;
+			console.log('player.id: ' + player.id + ", playerID: " + playerID);
+			if (player.id == playerID) {
+				data.players.splice(counter, 1);
 			} else {
-				finalIndex = counter;
+				counter++;
 			}
 		});
-		data.players.splice(finalIndex, 1);
 		writeFile(roomNum, data);
 	});
 }
