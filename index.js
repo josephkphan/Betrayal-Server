@@ -42,13 +42,32 @@ io.on('connection', function(socket) {
 		data.character.socketID = socket.id;
 
 		// Add player to room (event "joinedRoom" is emitted in joinRoom() call)
-		joinRoom(data.roomID, data.password, data.character, socket);
+		if (joinRoom(data.roomID, data.password, data.character, socket)) {
+			// Add socket id to list of clients
+			sockets[socket.id] = roomNum;
+			console.log(sockets);
 
-		// Add socket id to list of clients
-		sockets[socket.id] = roomNum;
-		console.log(sockets);
+			console.log("Someone joined room " + data.roomID.toString());
+		}
+	});
 
-		console.log("Someone joined room " + data.roomID.toString());
+	// Ready event
+	socket.on('clientReady', function(playerData, ack) {
+		ack(true);
+		console.log("clientReady");
+		// Go to room and change ready
+		jsonfile.readFile(getRoomFileName(playerData.room), function(err, data) {
+			data.players.forEach(function(player) {
+				// If this is the player that readied, change the data
+				if (player.id == playerData.playerID) {
+					player.isReady = playerData.ready;
+				}
+				// Broadcast to room that someone readied
+				socket.broadcast.to(player.socketID).emit('readyChanged', playerData);
+				console.log(player.socketID);
+			});
+			writeFile(roomNum, data);
+		});
 	});
 
 	// Leave room
@@ -133,20 +152,32 @@ function createRoom(roomNum, password, playerData, socket) {
 
 function joinRoom(roomNum, password, playerData, socket) {
 	jsonfile.readFile(getRoomFileName(roomNum), function(err, data) {
-		if (data.password == password) {
+		// If players in room are over max
+		console.log(data.players.length + "players in room");
+		if (data.players.length >= 4) {
+			socket.emit('failedJoinRoom');
+			return false;
+		}
+
+		// Check password
+		else if (data.password == password) {
 			data.players.push(playerData);
 			writeFile(roomNum, data);
 
 			// Broadcast to other players in the room the updated players list
 			console.log("Players currently in room " + roomNum.toString() + ": ");
 			data.players.forEach(function(player) {
-				socket.broadcast.to(player.socketID).emit('joinedRoom', data.players);
+				socket.broadcast.to(player.socketID).emit('joinedRoom', { players: data.players, roomID: roomNum });
 				console.log(player.id);
 			});
 
 			// Update the current player because the original socket doesn't get called above
-			socket.emit('joinedRoom', data.players);
+			socket.emit('joinedRoom', { players: data.players, roomID: roomNum });
+			return true;
 		}
+		
+		socket.emit('failedJoinRoom');
+		return false;
 	});
 }
 
