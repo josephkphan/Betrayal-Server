@@ -54,19 +54,43 @@ io.on('connection', function(socket) {
 	// Ready event
 	socket.on('clientReady', function(playerData, ack) {
 		ack(true);
-		console.log("clientReady");
 		// Go to room and change ready
 		jsonfile.readFile(getRoomFileName(playerData.room), function(err, data) {
+			console.log("----------------------------------");
 			data.players.forEach(function(player) {
 				// If this is the player that readied, change the data
 				if (player.id == playerData.playerID) {
 					player.isReady = playerData.ready;
+					if (player.isReady) {
+						data.ready = data.ready + 1;
+					} else {
+						data.ready = data.ready - 1;
+					}
 				}
 				// Broadcast to room that someone readied
 				socket.broadcast.to(player.socketID).emit('readyChanged', playerData);
-				console.log(player.socketID);
 			});
+			
+			// After player readies have all been set, check to see if enough
+			//  players are ready. If so, emit sendToDungeon to all players
+			console.log("Players readied: " + data.ready);
+			console.log("Checking to join dungeon...");
+			console.log("Players ready * 2 = " + (data.ready * 2));
+			console.log("Total players: " + data.players.length);
+			if (data.ready * 2 >= data.players.length) {
+				console.log("*** JOINING DUNGEON ***");
+				data.players.forEach(function(player) {
+					if (playerData.playerID == player.id) {
+						console.log("Emitting to OP");
+						socket.emit('sendToDungeon');
+					} else {
+						console.log("Emitting to room member");
+						socket.broadcast.to(player.socketID).emit('sendToDungeon');
+					}
+				});
+			}
 			writeFile(roomNum, data);
+			console.log("Data Ready : " + data.ready);
 		});
 	});
 
@@ -97,7 +121,7 @@ function findAvailableRoom() {
 	//rooms[roomNum] = 1;
 
 	// Initialize room
-	var data = { password: null, players: [] };
+	var data = { password: "", ready: 0, players: [] };
 	writeFile(roomNum, data);
 
 	return roomNum;
