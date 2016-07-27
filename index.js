@@ -5,7 +5,7 @@ var jsonfile = require('jsonfile');
 var rooms = [0, 0, 0, 0, 0];
 
 // Key: socket id's, Value: room #
-var sockets = {}
+var sockets = {};
 
 // Server start
 server.listen(8080, function() {
@@ -14,6 +14,8 @@ server.listen(8080, function() {
 
 // Individual player connection
 io.on('connection', function(socket) {
+	var roomID = -1;
+
 	// Indicates Player connected to server
 	console.log("Player Connected!");
 
@@ -31,9 +33,8 @@ io.on('connection', function(socket) {
 
 		// Add socket id to list of clients
 		sockets[socket.id] = roomNum;
-		console.log(sockets);
 
-		console.log("Room created: " + roomNum.toString());
+		roomID = roomNum;
 	});
 
 	// Join room
@@ -44,7 +45,8 @@ io.on('connection', function(socket) {
 		// Add player to room (event "joinedRoom" is emitted in joinRoom() call)
 		if (joinRoom(data.roomID, data.password, data.character, socket)) {
 			// Add socket id to list of clients
-			sockets[socket.id] = roomNum;
+			sockets[socket.id] = data.roomID;
+			roomID = roomNum;
 			console.log(sockets);
 
 			console.log("Someone joined room " + data.roomID.toString());
@@ -99,6 +101,16 @@ io.on('connection', function(socket) {
 		console.log('Player ' + data.id.toString() + ' left room ' + data.roomID.toString());
 		leaveRoom(data.id, data.roomID);
 		delete sockets[socket.id];
+	});
+
+	// New Event
+	socket.on('newEvent', function(data) {
+		jsonfile.readFile(getRoomFileName(room), function(err, roomData) {
+			// Loop through everyone and emit event
+			roomData.players.forEach(function(player) {
+				socket.broadcast.to(player.socketID).emit('newEvent', data);
+			});
+		});
 	});
 
 	// Player disconnect event
