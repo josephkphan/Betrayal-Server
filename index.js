@@ -43,14 +43,33 @@ io.on('connection', function(socket) {
 		data.character.socketID = socket.id;
 
 		// Add player to room (event "joinedRoom" is emitted in joinRoom() call)
-		if (joinRoom(data.roomID, data.password, data.character, socket)) {
-			// Add socket id to list of clients
-			sockets[socket.id] = data.roomID;
-			roomID = roomNum;
-			console.log(sockets);
+		jsonfile.readFile(getRoomFileName(data.roomID), function(err, roomData) {
+			// If players in room are over max
+			if (roomData.players.length >= 4) {
+				socket.emit('failedJoinRoom');
+				return;
+			}
 
-			console.log("Someone joined room " + data.roomID.toString());
-		}
+			// Check password
+			else if (roomData.password == data.password) {
+				roomData.players.push(data.character);
+				writeFile(data.roomID, roomData);
+
+				// Broadcast to other players in the room the updated players list
+				roomData.players.forEach(function(player) {
+					socket.broadcast.to(player.socketID).emit('joinedRoom', { players: roomData.players, roomID: data.roomID });
+				});
+
+				// Update the current player because the original socket doesn't get called above
+				socket.emit('joinedRoom', { players: roomData.players, roomID: data.roomID });
+				sockets[socket.id] = data.roomID;
+				roomID = data.roomID;
+				return;
+			}
+
+			socket.emit('failedJoinRoom');
+			console.log("PART 3");
+		});
 	});
 
 	// Ready event
@@ -75,24 +94,17 @@ io.on('connection', function(socket) {
 			
 			// After player readies have all been set, check to see if enough
 			//  players are ready. If so, emit sendToDungeon to all players
-			console.log("Players readied: " + data.ready);
-			console.log("Checking to join dungeon...");
-			console.log("Players ready * 2 = " + (data.ready * 2));
-			console.log("Total players: " + data.players.length);
 			if (data.ready * 2 >= data.players.length) {
 				console.log("*** JOINING DUNGEON ***");
 				data.players.forEach(function(player) {
 					if (playerData.playerID == player.id) {
-						console.log("Emitting to OP");
 						socket.emit('sendToDungeon');
 					} else {
-						console.log("Emitting to room member");
 						socket.broadcast.to(player.socketID).emit('sendToDungeon');
 					}
 				});
 			}
 			writeFile(roomNum, data);
-			console.log("Data Ready : " + data.ready);
 		});
 	});
 
@@ -105,7 +117,9 @@ io.on('connection', function(socket) {
 
 	// New Event
 	socket.on('newEvent', function(data) {
-		jsonfile.readFile(getRoomFileName(room), function(err, roomData) {
+		console.log("newEvent");
+		console.log(data.eventType);
+		jsonfile.readFile(getRoomFileName(roomID), function(err, roomData) {
 			// Loop through everyone and emit event
 			roomData.players.forEach(function(player) {
 				socket.broadcast.to(player.socketID).emit('newEvent', data);
@@ -181,18 +195,17 @@ function createRoom(roomNum, password, playerData, socket) {
 		data.password = password;
 		data.players.push(playerData);
 		writeFile(roomNum, data);
-		console.log("Players currently in room " + roomNum.toString() + ": ");
-		console.log(playerData.id.toString());
 	});
 }
 
-function joinRoom(roomNum, password, playerData, socket) {
+function joinRoom(roomNum, password, playerData, socket, roomID) {
 	jsonfile.readFile(getRoomFileName(roomNum), function(err, data) {
 		// If players in room are over max
 		console.log(data.players.length + "players in room");
 		if (data.players.length >= 4) {
 			socket.emit('failedJoinRoom');
-			return false;
+			console.log("PART 1");
+			return;
 		}
 
 		// Check password
@@ -201,25 +214,26 @@ function joinRoom(roomNum, password, playerData, socket) {
 			writeFile(roomNum, data);
 
 			// Broadcast to other players in the room the updated players list
-			console.log("Players currently in room " + roomNum.toString() + ": ");
 			data.players.forEach(function(player) {
 				socket.broadcast.to(player.socketID).emit('joinedRoom', { players: data.players, roomID: roomNum });
-				console.log(player.id);
 			});
 
 			// Update the current player because the original socket doesn't get called above
 			socket.emit('joinedRoom', { players: data.players, roomID: roomNum });
-			return true;
+			console.log("PART 2");
+			sockets[socket.id] = data.roomID;
+			roomID[0] = data.roomID;
+			return;
 		}
 		
 		socket.emit('failedJoinRoom');
-		return false;
+		console.log("PART 3");
+		return;
 	});
 }
 
 function getRoomFileName(roomID){
-	var roomName = "./rooms/" + roomID.toString() + ".json";
-	return roomName;
+	return "./rooms/" + roomID.toString() + ".json";
 }
 
 function writeFile(roomID, data) {
