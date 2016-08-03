@@ -2,10 +2,12 @@ var app = require('express')();
 var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var jsonfile = require('jsonfile');
-var rooms = [0, 0, 0, 0, 0];
+var rooms = [];
 
-// Key: socket id's, Value: room #
-var sockets = {};
+// Initialize rooms
+for (var i = 0; i < 10; i++) {
+	rooms.push(false);
+}
 
 // Server start
 server.listen(8080, function() {
@@ -21,20 +23,35 @@ io.on('connection', function(socket) {
 
 	// Create a room
 	socket.on('createRoom', function(data) {
-		// Add player to room
-		var roomNum = findAvailableRoom();
+		var roomNum;
+		do {
+			// If rooms all get occupied, generate 10 more rooms
+			if (areAllRoomsOccupied()) {
+				for (var i = 0; i < 10; i++) {
+					rooms.push(false);
+				}
+			}
+
+			// Create random room number
+			roomNum = getRandomInt(0, rooms.length - 1) + 1;
+		} while (rooms[roomNum]);
 
 		// Add socket id to player and then create room
 		data.character.socketID = socket.id;
-		createRoom(roomNum, data.password, data.character);
+
+		// Persist player in room's json file
+		writeFile(roomNum, { password: "", players: [data.character], ready: 0 });
+
+		// Mark room as occupied
+		rooms[roomNum] = true;
 
 		// Emit room id
 		socket.emit('roomCreated', { roomID: roomNum });
 
-		// Add socket id to list of clients
-		sockets[socket.id] = roomNum;
-
+		// Set socket instance variables
 		roomID = roomNum;
+
+		console.log("Someone created and joined room " + roomID);
 	});
 
 	// Join room
@@ -47,11 +64,8 @@ io.on('connection', function(socket) {
 			// If players in room are over max
 			if (roomData.players.length >= 4) {
 				socket.emit('failedJoinRoom');
-				return;
-			}
-
-			// Check password
-			else if (roomData.password == data.password) {
+			} else if (roomData.password == data.password) {
+				// Check password
 				roomData.players.push(data.character);
 				writeFile(data.roomID, roomData);
 
@@ -62,13 +76,12 @@ io.on('connection', function(socket) {
 
 				// Update the current player because the original socket doesn't get called above
 				socket.emit('joinedRoom', { players: roomData.players, roomID: data.roomID });
-				sockets[socket.id] = data.roomID;
-				roomID = data.roomID;
-				return;
-			}
 
-			socket.emit('failedJoinRoom');
-			console.log("PART 3");
+				// Set client instance variables
+				roomID = data.roomID;
+			} else {
+				socket.emit('failedJoinRoom');
+			}
 		});
 	});
 
@@ -108,13 +121,6 @@ io.on('connection', function(socket) {
 		});
 	});
 
-	// Leave room
-	socket.on('leaveRoom', function(data) {
-		console.log('Player ' + data.id.toString() + ' left room ' + data.roomID.toString());
-		leaveRoom(data.id, data.roomID);
-		delete sockets[socket.id];
-	});
-
 	// New Event
 	socket.on('newEvent', function(data) {
 		console.log("newEvent");
@@ -129,107 +135,24 @@ io.on('connection', function(socket) {
 
 	// Player disconnect event
 	socket.on('disconnect', function() {
-		leaveRoomBySocket(socket.id);
+		jsonfile.readFile(getRoomFileName(roomID), function(err, data) {
+			var counter = 0;
+
+			data.players.forEach(function(player) {
+				if (player.socketID == socket.id) {
+					data.players.splice(counter, 1);
+				} else {
+					counter++;
+				}
+			});
+			writeFile(roomID, data);
+		});
 		console.log("Player Disconnected")
 	});
 });
 
-function findAvailableRoom() {
-	// var roomNum;
-	// do {
-	// 	// Create random room number
-	// 	//roomNum = getRandomInt(0, rooms.length - 1);
-	// 	roomNum = 0;
-	// } while (rooms[roomNum] == 1)
-	roomNum = 0;
-
-	// Set room to 1
-	//rooms[roomNum] = 1;
-
-	// Initialize room
-	var data = { password: "", ready: 0, players: [] };
-	writeFile(roomNum, data);
-
-	return roomNum;
-}
-
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// Leave room with socketID, sudden disconnect
-function leaveRoomBySocket(socketID) {
-	jsonfile.readFile(getRoomFileName(sockets[socketID]), function(err, data) {
-		var counter = 0;
-
-		data.players.forEach(function(player) {
-			if (player.socketID == socketID) {
-				data.players.splice(counter, 1);
-			} else {
-				counter++;
-			}
-		});
-		writeFile(roomNum, data);
-	});
-}
-
-// Leave room with playerID, formal leaving
-function leaveRoom(playerID, roomNum) {
-	jsonfile.readFile(getRoomFileName(roomNum), function(err, data) {
-		var counter = 0;
-
-		data.players.forEach(function(player) {
-			console.log('player.id: ' + player.id + ", playerID: " + playerID);
-			if (player.id == playerID) {
-				data.players.splice(counter, 1);
-			} else {
-				counter++;
-			}
-		});
-		writeFile(roomNum, data);
-	});
-}
-
-function createRoom(roomNum, password, playerData, socket) {
-	jsonfile.readFile(getRoomFileName(roomNum), function(err, data) {
-		data.password = password;
-		data.players.push(playerData);
-		writeFile(roomNum, data);
-	});
-}
-
-function joinRoom(roomNum, password, playerData, socket, roomID) {
-	jsonfile.readFile(getRoomFileName(roomNum), function(err, data) {
-		// If players in room are over max
-		console.log(data.players.length + "players in room");
-		if (data.players.length >= 4) {
-			socket.emit('failedJoinRoom');
-			console.log("PART 1");
-			return;
-		}
-
-		// Check password
-		else if (data.password == password) {
-			data.players.push(playerData);
-			writeFile(roomNum, data);
-
-			// Broadcast to other players in the room the updated players list
-			data.players.forEach(function(player) {
-				socket.broadcast.to(player.socketID).emit('joinedRoom', { players: data.players, roomID: roomNum });
-			});
-
-			// Update the current player because the original socket doesn't get called above
-			socket.emit('joinedRoom', { players: data.players, roomID: roomNum });
-			console.log("PART 2");
-			sockets[socket.id] = data.roomID;
-			roomID[0] = data.roomID;
-			return;
-		}
-		
-		socket.emit('failedJoinRoom');
-		console.log("PART 3");
-		return;
-	});
 }
 
 function getRoomFileName(roomID){
@@ -238,4 +161,13 @@ function getRoomFileName(roomID){
 
 function writeFile(roomID, data) {
 	jsonfile.writeFile(getRoomFileName(roomID), data, function(err) {});
+}
+
+function areAllRoomsOccupied() {
+	for (var i = 0; i < rooms.length; i++) {
+		if (!rooms[i]) {
+			return false;
+		}
+	}
+	return true;
 }
