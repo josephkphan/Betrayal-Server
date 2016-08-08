@@ -17,6 +17,7 @@ server.listen(8080, function () {
 // Individual player connection
 io.on('connection', function (socket) {
     var roomID = -1;
+    var players = [];
 
     // Indicates Player connected to server
     console.log("Player Connected!");
@@ -40,7 +41,7 @@ io.on('connection', function (socket) {
         data.character.socketID = socket.id;
 
         // Persist player in room's json file
-        writeFile(roomNum, {password: "", players: [data.character], ready: 0});
+        writeFile(roomNum, { password: data.password, players: [data.character], ready: 0 });
 
         // Mark room as occupied
         rooms[roomNum] = true;
@@ -50,6 +51,7 @@ io.on('connection', function (socket) {
 
         // Set socket instance variables
         roomID = roomNum;
+        players.push(data.character);
 
         console.log("Someone created and joined room " + roomID);
     });
@@ -59,33 +61,42 @@ io.on('connection', function (socket) {
         // Add socket id to player
         data.character.socketID = socket.id;
 
-        // Add player to room (event "joinedRoom" is emitted in joinRoom() call)
-        jsonfile.readFile(getRoomFileName(data.roomID), function (err, roomData) {
-            // If players in room are over max
-            if (roomData.players.length >= 4) {
-                socket.emit('failedJoinRoom');
-            } else if (roomData.password == data.password) {
-                // Check password
-                roomData.players.push(data.character);
-                writeFile(data.roomID, roomData);
+        if (rooms[data.roomID]) {
+            // Add player to room (event "joinedRoom" is emitted in joinRoom() call)
+            jsonfile.readFile(getRoomFileName(data.roomID), function (err, roomData) {
+                // If players in room are over max
+                if (roomData.players.length >= 4) {
+                    socket.emit('failedJoinRoom');
+                    print("joinRoom", "length >= 4");
+                } else if (roomData.password == data.password) {
+                    print("PASSWORD CHECK", "roomData.password = " + roomData.password + ", data.password = " + data.password);
+                    // Check password
+                    roomData.players.push(data.character);
+                    writeFile(data.roomID, roomData);
 
-                // Broadcast to other players in the room the updated players list
-                roomData.players.forEach(function (player) {
-                    socket.broadcast.to(player.socketID).emit('joinedRoom', {
-                        players: roomData.players,
-                        roomID: data.roomID
+                    // Broadcast to other players in the room the updated players list
+                    roomData.players.forEach(function (player) {
+                        socket.broadcast.to(player.socketID).emit('joinedRoom', {
+                            players: roomData.players,
+                            roomID: data.roomID
+                        });
                     });
-                });
 
-                // Update the current player because the original socket doesn't get called above
-                socket.emit('joinedRoom', {players: roomData.players, roomID: data.roomID});
+                    // Update the current player because the original socket doesn't get called above
+                    socket.emit('joinedRoom', {players: roomData.players, roomID: data.roomID});
 
-                // Set client instance variables
-                roomID = data.roomID;
-            } else {
-                socket.emit('failedJoinRoom');
-            }
-        });
+                    // Set client instance variables
+                    roomID = data.roomID;
+                    players = roomData.players;
+                } else {
+                    // Wrong password
+                    socket.emit('failedJoinRoom');
+                    print("joinRoom", "wrong password");
+                }
+            });
+        } else {
+            socket.emit("roomNull");
+        }
     });
 
     // Ready event
@@ -110,7 +121,7 @@ io.on('connection', function (socket) {
 
             // After player readies have all been set, check to see if enough
             //  players are ready. If so, emit sendToDungeon to all players
-            if (data.ready * 2 >= data.players.length) {
+            if (data.ready == data.players.length) {
                 console.log("*** JOINING DUNGEON ***");
                 data.players.forEach(function (player) {
                     if (playerData.playerID == player.id) {
@@ -148,20 +159,22 @@ io.on('connection', function (socket) {
 
     // Player disconnect event
     socket.on('disconnect', function () {
-        jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
-            var counter = 0;
+        if (roomID != -1) {
+            jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
+                var counter = 0;
 
-            data.players.forEach(function (player) {
-                if (player.socketID == socket.id) {
-                    data.players.splice(counter, 1);
-                } else {
-                    counter++;
-                }
+                data.players.forEach(function (player) {
+                    if (player.socketID == socket.id) {
+                        data.players.splice(counter, 1);
+                    } else {
+                        counter++;
+                    }
+                });
+                writeFile(roomID, data);
             });
-            writeFile(roomID, data);
-        });
-        console.log("Someone left room " + roomID);
-        console.log("Player Disconnected")
+            console.log("Someone left room " + roomID);
+            console.log("Player Disconnected");
+        }
     });
 });
 
@@ -185,4 +198,9 @@ function areAllRoomsOccupied() {
         }
     }
     return true;
+}
+
+function print(title, text) {
+    console.log("--------------" + title + "--------------");
+    console.log(text);
 }
