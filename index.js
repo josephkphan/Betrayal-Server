@@ -67,9 +67,7 @@ io.on('connection', function (socket) {
                 // If players in room are over max
                 if (roomData.players.length >= 4) {
                     socket.emit('failedJoinRoom');
-                    print("joinRoom", "length >= 4");
                 } else if (roomData.password == data.password) {
-                    print("PASSWORD CHECK", "roomData.password = " + roomData.password + ", data.password = " + data.password);
                     // Check password
                     roomData.players.push(data.character);
                     writeFile(data.roomID, roomData);
@@ -91,12 +89,16 @@ io.on('connection', function (socket) {
                 } else {
                     // Wrong password
                     socket.emit('failedJoinRoom');
-                    print("joinRoom", "wrong password");
                 }
             });
         } else {
             socket.emit("roomNull");
         }
+    });
+
+    // Other player joined room
+    socket.on('joinedRoom', function(data) {
+        players = data.players;
     });
 
     // Ready event
@@ -162,15 +164,27 @@ io.on('connection', function (socket) {
         if (roomID != -1) {
             jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
                 var counter = 0;
+                var playerID = -1;
 
                 data.players.forEach(function (player) {
                     if (player.socketID == socket.id) {
+                        playerID = player.id;
                         data.players.splice(counter, 1);
                     } else {
                         counter++;
                     }
                 });
                 writeFile(roomID, data);
+
+                // If no players left in room, set room from occupied to free
+                if (data.players.length == 0) {
+                    rooms[roomID] = false;
+                }
+
+                // Emit to all players in the room that someone left
+                players.forEach(function (player) {
+                    socket.broadcast.to(player.socketID).emit("playerLeftRoom", { id: playerID });
+                });
             });
             console.log("Someone left room " + roomID);
             console.log("Player Disconnected");
@@ -200,6 +214,7 @@ function areAllRoomsOccupied() {
     return true;
 }
 
+// Method for debugging
 function print(title, text) {
     console.log("--------------" + title + "--------------");
     console.log(text);
