@@ -73,6 +73,7 @@ io.on('connection', function (socket) {
                     writeFile(data.roomID, roomData);
 
                     // Broadcast to other players in the room the updated players list
+                    print("PLAYERS JOINED ROOOOOM", socket.id);
                     roomData.players.forEach(function (player) {
                         socket.broadcast.to(player.socketID).emit('joinedRoom', {
                             players: roomData.players,
@@ -98,7 +99,10 @@ io.on('connection', function (socket) {
 
     // Other player joined room
     socket.on('joinedRoom', function(data) {
-        players = data.players;
+        print("OTHER PLAYER JOINED ROOM");
+        jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
+            players = roomData.players;
+        });
     });
 
     // Ready event
@@ -146,11 +150,34 @@ io.on('connection', function (socket) {
         });
     });
 
+    socket.on('characterChanged', function (data) {
+        print("characterChanged");
+        jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
+            // Loop through characters and if id's match, update character
+            for (var i = 0; i < roomData.players.length; i++) {
+                if (roomData.players[i].id == data.character.id) {
+                    roomData.players[i] = data.character;
+                }
+            }
+            players = roomData.players;
+
+            // Emit to all players in room that character updated
+            players.forEach(function (player) {
+                socket.broadcast.to(player.socketID).emit('updateCharacters', { character: data.character });
+                print('CHARACTERCHANGED', "SECIND GDAISGNAL");
+            });
+            //writeFile(roomID, roomData);
+        });
+    });
+
+    socket.on('updateCharacters', function (data) {
+        jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
+            players = roomData.players;
+        });
+    });
+
     // New Event
     socket.on('newEvent', function (data) {
-        console.log("--------------------");
-        console.log("newEvent: ");
-        console.log(data);
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
             // Loop through everyone and emit event
             roomData.players.forEach(function (player) {
@@ -202,6 +229,7 @@ function getRoomFileName(roomID) {
 
 function writeFile(roomID, data) {
     jsonfile.writeFile(getRoomFileName(roomID), data, function (err) {
+
     });
 }
 
