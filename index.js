@@ -156,17 +156,19 @@ io.on('connection', function (socket) {
             // Loop through characters and if id's match, update character
             for (var i = 0; i < roomData.players.length; i++) {
                 if (roomData.players[i].id == data.character.id) {
+                    // Add socket id to character
+                    data.character.socketID = socket.id;
                     roomData.players[i] = data.character;
+                    break;
                 }
             }
+            writeFile(roomID, roomData);
             players = roomData.players;
 
             // Emit to all players in room that character updated
             players.forEach(function (player) {
                 socket.broadcast.to(player.socketID).emit('updateCharacters', { character: data.character });
-                print('CHARACTERCHANGED', "SECIND GDAISGNAL");
             });
-            //writeFile(roomID, roomData);
         });
     });
 
