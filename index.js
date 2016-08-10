@@ -3,7 +3,6 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var jsonfile = require('jsonfile');
 var rooms = [];
-
 // Initialize rooms
 for (var i = 0; i < 10; i++) {
     rooms.push(false);
@@ -41,7 +40,7 @@ io.on('connection', function (socket) {
         data.character.socketID = socket.id;
 
         // Persist player in room's json file
-        writeFile(roomNum, { password: data.password, players: [data.character], ready: 0 });
+        writeFile(roomNum, {password: data.password, players: [data.character], ready: 0});
 
         // Mark room as occupied
         rooms[roomNum] = true;
@@ -98,8 +97,8 @@ io.on('connection', function (socket) {
     });
 
     // Other player joined room
-    socket.on('joinedRoom', function(data) {
-        print("OTHER PLAYER JOINED ROOM");
+    socket.on('joinedRoom', function (data) {
+        // Basically just update client instance variables
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
             players = roomData.players;
         });
@@ -129,11 +128,45 @@ io.on('connection', function (socket) {
             //  players are ready. If so, emit sendToDungeon to all players
             if (data.ready == data.players.length) {
                 console.log("*** JOINING DUNGEON ***");
+
+                /*******************************************************************************/
+                /******************************Creating Random MID******************************/
+                var tier = 0;
+                var monsterID = 0;
+                data.players.forEach(function (player) {
+                    if (player.stats.floor > tier)
+                        tier = player.stats.floor;
+                });
+                tier = Math.ceil(tier / 5);
+                switch (tier) {
+                    case 0:
+                        monsterID = 0;
+                        break;
+                    case 1:
+                    case 2:
+                    case 3:
+                        monsterID = getRandomInt(0, 10);
+                        break;
+                    case 4:
+                        monsterID = getRandomInt(0, 8);
+                        break;
+                    case 5:
+                        monsterID = getRandomInt(0, 6);
+                        break;
+                    default:
+                        monsterID = getRandomInt(0, 5);
+                        break;
+                }
+
+
+                /*******************************************************************************/
+
+                print("FUCKVINCENT", monsterID)
                 data.players.forEach(function (player) {
                     if (playerData.playerID == player.id) {
-                        socket.emit('startDungeonCountdown');
+                        socket.emit('startDungeonCountdown', {monsterID: monsterID});
                     } else {
-                        socket.broadcast.to(player.socketID).emit('startDungeonCountdown');
+                        socket.broadcast.to(player.socketID).emit('startDungeonCountdown', {monsterID: monsterID});
                     }
                 });
                 setTimeout(function () {
@@ -167,7 +200,7 @@ io.on('connection', function (socket) {
 
             // Emit to all players in room that character updated
             players.forEach(function (player) {
-                socket.broadcast.to(player.socketID).emit('updateCharacters', { character: data.character });
+                socket.broadcast.to(player.socketID).emit('updateCharacters', {character: data.character});
             });
         });
     });
@@ -212,7 +245,7 @@ io.on('connection', function (socket) {
 
                 // Emit to all players in the room that someone left
                 players.forEach(function (player) {
-                    socket.broadcast.to(player.socketID).emit("playerLeftRoom", { id: playerID });
+                    socket.broadcast.to(player.socketID).emit("playerLeftRoom", {id: playerID});
                 });
             });
             console.log("Someone left room " + roomID);
@@ -248,4 +281,37 @@ function areAllRoomsOccupied() {
 function print(title, text) {
     console.log("--------------" + title + "--------------");
     console.log(text);
+}
+
+function createRandomMonsterID(roomID) {
+    var tier = 0;
+    jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
+        data.players.forEach(function (player) {
+            if (player.stats.floor > tier)
+                tier = player.stats.foor;
+        });
+        switch (tier) {
+            case 0:
+                return 0;
+                break;
+            case 1:
+                return getRandomInt(0, 10);
+                break;
+            case 2:
+                return getRandomInt(0, 10);
+                break;
+            case 3:
+                return getRandomInt(0, 10);
+                break;
+            case 4:
+                return getRandomInt(0, 8);
+                break;
+            case 5:
+                return getRandomInt(0, 6);
+                break;
+            default:
+                return getRandomInt(0, 5);
+                break;
+        }
+    });
 }
