@@ -12,20 +12,16 @@ for (var i = 0; i < 10; i++) {
 
 // Scan for dead connections every hour (3600000 milliseconds)
 setInterval(function () {
-    console.log("scanning");
     var j = 0;
     for (j = 0; j < rooms.length - 1; j++) {
         if (rooms[j]) {
-            console.log("first: " + j);
             checkRoom(j)
         }
     }
-    console.log(rooms);
 }, 3600000);
 
 function checkRoom(roomID) {
     jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
-        console.log("reading: " + roomID);
         if (data.players.length > 0) {
             data.players.forEach(function (player) {
                 if (io.sockets.sockets[player.socketID] == null) {
@@ -35,7 +31,6 @@ function checkRoom(roomID) {
 
                     // If no players left in room, mark room as free
                     if (data.players.length == 0) {
-                        console.log("second: " + roomID);
                         rooms[roomID] = false;
                     }
                 }
@@ -273,7 +268,7 @@ io.on('connection', function (socket) {
                 data.players.forEach(function (player) {
                     if (player.socketID == socket.id) {
                         charThatLeft = player;
-                        //data.players.splice(counter, 1);
+                        data.players.splice(counter, 1);
                     } else {
                         counter++;
                     }
