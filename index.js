@@ -3,6 +3,8 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var jsonfile = require('jsonfile');
 var rooms = [];
+var dungeonTimeouts = [];
+
 // Initialize rooms
 for (var i = 0; i < 10; i++) {
     rooms.push(false);
@@ -33,14 +35,19 @@ io.on('connection', function (socket) {
             }
 
             // Create random room number
-            roomNum = getRandomInt(0, rooms.length - 1) + 1;
+            roomNum = getRandomIntExclusive(0, rooms.length - 1) + 1;
         } while (rooms[roomNum]);
 
         // Add socket id to player and then create room
         data.character.socketID = socket.id;
 
         // Persist player in room's json file
-        writeFile(roomNum, {password: data.password, players: [data.character], ready: 0});
+        writeFile(roomNum, {
+            password: data.password,
+            players: [data.character],
+            ready: 0,
+            inDungeon: false
+        });
 
         // Mark room as occupied
         rooms[roomNum] = true;
@@ -72,7 +79,6 @@ io.on('connection', function (socket) {
                     writeFile(data.roomID, roomData);
 
                     // Broadcast to other players in the room the updated players list
-                    print("PLAYERS JOINED ROOOOOM", socket.id);
                     roomData.players.forEach(function (player) {
                         socket.broadcast.to(player.socketID).emit('joinedRoom', {
                             players: roomData.players,
@@ -109,7 +115,6 @@ io.on('connection', function (socket) {
         ack(true);
         // Go to room and change ready
         jsonfile.readFile(getRoomFileName(playerData.room), function (err, data) {
-            console.log("----------------------------------");
             data.players.forEach(function (player) {
                 // If this is the player that readied, change the data
                 if (player.id == playerData.playerID) {
@@ -158,10 +163,8 @@ io.on('connection', function (socket) {
                         break;
                 }
 
-
                 /*******************************************************************************/
 
-                print("FUCKVINCENT", monsterID)
                 data.players.forEach(function (player) {
                     if (playerData.playerID == player.id) {
                         socket.emit('startDungeonCountdown', {monsterID: monsterID});
@@ -169,43 +172,48 @@ io.on('connection', function (socket) {
                         socket.broadcast.to(player.socketID).emit('startDungeonCountdown', {monsterID: monsterID});
                     }
                 });
-                setTimeout(function () {
-                    data.players.forEach(function (player) {
-                        if (playerData.playerID == player.id) {
-                            socket.emit('enterDungeon');
-                        } else {
-                            socket.broadcast.to(player.socketID).emit('enterDungeon');
-                        }
-                    });
-                }, 5000);
+                dungeonTimeouts[roomID] = setTimeout(dungeonCountdownTimeoutCall, 5000);
             }
             writeFile(roomID, data);
         });
     });
 
-    socket.on('characterChanged', function (data) {
-        print("characterChanged");
+    var dungeonCountdownTimeoutCall = function () {
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
+            roomData.inDungeon = true;
+            roomData.players.forEach(function (player) {
+                socket.broadcast.to(player.socketID).emit("enterDungeon");
+            });
+            socket.emit("enterDungeon");
+            writeFile(roomID, roomData);
+        });
+    };
+
+    socket.on('characterChanged', function (data) {
+        jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
+            var charChanged;
             // Loop through characters and if id's match, update character
             for (var i = 0; i < roomData.players.length; i++) {
                 if (roomData.players[i].id == data.character.id) {
                     // Add socket id to character
                     data.character.socketID = socket.id;
-                    roomData.players[i] = data.character;
+                    roomData.players[i] = charChanged = data.character;
                     break;
                 }
             }
             writeFile(roomID, roomData);
+
+            // Update client variables
             players = roomData.players;
 
             // Emit to all players in room that character updated
             players.forEach(function (player) {
-                socket.broadcast.to(player.socketID).emit('updateCharacters', {character: data.character});
+                socket.broadcast.to(player.socketID).emit('updateCharacter', {character: charChanged});
             });
         });
     });
 
-    socket.on('updateCharacters', function (data) {
+    socket.on('updateServerCharacters', function (data) {
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
             players = roomData.players;
         });
@@ -226,17 +234,16 @@ io.on('connection', function (socket) {
         if (roomID != -1) {
             jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
                 var counter = 0;
-                var playerID = -1;
+                var charThatLeft;
 
                 data.players.forEach(function (player) {
                     if (player.socketID == socket.id) {
-                        playerID = player.id;
+                        charThatLeft = player;
                         data.players.splice(counter, 1);
                     } else {
                         counter++;
                     }
                 });
-                writeFile(roomID, data);
 
                 // If no players left in room, set room from occupied to free
                 if (data.players.length == 0) {
@@ -244,18 +251,48 @@ io.on('connection', function (socket) {
                 }
 
                 // Emit to all players in the room that someone left
-                players.forEach(function (player) {
-                    socket.broadcast.to(player.socketID).emit("playerLeftRoom", {id: playerID});
-                });
+                if (!data.inDungeon) {
+                    if (dungeonTimeouts[roomID] != null && !dungeonTimeouts[roomID]._called) {
+                        clearTimeout(dungeonTimeouts[roomID]);
+                        // unready everyone
+                        data.players.forEach(function (player) {
+                            player.isReady = false;
+                        });
+                        data.ready = 0;
+                    }
+                    players.forEach(function (player) {
+                        socket.broadcast.to(player.socketID).emit("playerLeftRoomInLobby", {character: charThatLeft});
+                    });
+                } else { // If disconnected in dungeon
+                    var playa;
+                    players.forEach(function (player) {
+                        if (player.socketID == socket.id) {
+                            playa = player;
+                        }
+                    });
+                    players.forEach(function (player) {
+                        socket.broadcast.to(player.socketID).emit("disconnectInDungeon", {player: playa});
+                    });
+                }
+                writeFile(roomID, data);
             });
             console.log("Someone left room " + roomID);
             console.log("Player Disconnected");
         }
-    });
-});
+    })
+    ;
+})
+;
 
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// [min, max)
+function getRandomIntExclusive(min, max) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min;
 }
 
 function getRoomFileName(roomID) {
