@@ -10,6 +10,40 @@ for (var i = 0; i < 10; i++) {
     rooms.push(false);
 }
 
+// Scan for dead connections every hour (3600000 milliseconds)
+setInterval(function () {
+    console.log("scanning");
+    var j = 0;
+    for (j = 0; j < rooms.length - 1; j++) {
+        if (rooms[j]) {
+            console.log("first: " + j);
+            checkRoom(j)
+        }
+    }
+    console.log(rooms);
+}, 3600000);
+
+function checkRoom(roomID) {
+    jsonfile.readFile(getRoomFileName(roomID), function (err, data) {
+        console.log("reading: " + roomID);
+        if (data.players.length > 0) {
+            data.players.forEach(function (player) {
+                if (io.sockets.sockets[player.socketID] == null) {
+                    // Remove player from room
+                    data.players.splice(data.players.indexOf(player), 1);
+                    writeFile(roomID, data);
+
+                    // If no players left in room, mark room as free
+                    if (data.players.length == 0) {
+                        console.log("second: " + roomID);
+                        rooms[roomID] = false;
+                    }
+                }
+            })
+        }
+    });
+}
+
 // Server start
 server.listen(8080, function () {
     console.log("Server is now running...");
@@ -103,7 +137,7 @@ io.on('connection', function (socket) {
     });
 
     // Other player joined room
-    socket.on('joinedRoom', function (data) {
+    socket.on('joinedRoom', function () {
         // Basically just update client instance variables
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
             players = roomData.players;
@@ -213,7 +247,7 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('updateServerCharacters', function (data) {
+    socket.on('updateServerCharacters', function () {
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
             players = roomData.players;
         });
@@ -239,7 +273,7 @@ io.on('connection', function (socket) {
                 data.players.forEach(function (player) {
                     if (player.socketID == socket.id) {
                         charThatLeft = player;
-                        data.players.splice(counter, 1);
+                        //data.players.splice(counter, 1);
                     } else {
                         counter++;
                     }
