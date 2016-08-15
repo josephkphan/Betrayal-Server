@@ -172,6 +172,13 @@ io.on('connection', function (socket) {
                         tier = player.stats.floor;
                 });
                 tier = Math.ceil(tier / 5);
+
+                // choose random tier
+                if (tier != 5 && tier != 0)
+                    tier = getRandomInt(1, tier);
+                if (tier > 5)
+                    tier = 5;
+
                 switch (tier) {
                     case 0:
                         monsterID = 0;
@@ -192,13 +199,20 @@ io.on('connection', function (socket) {
                         break;
                 }
 
+
                 /*******************************************************************************/
 
                 data.players.forEach(function (player) {
                     if (playerData.playerID == player.id) {
-                        socket.emit('startDungeonCountdown', {monsterID: monsterID});
+                        socket.emit('startDungeonCountdown', {
+                            monsterID: monsterID,
+                            monsterTier: tier
+                        });
                     } else {
-                        socket.broadcast.to(player.socketID).emit('startDungeonCountdown', {monsterID: monsterID});
+                        socket.broadcast.to(player.socketID).emit('startDungeonCountdown', {
+                            monsterID: monsterID,
+                            monsterTier: tier
+                        });
                     }
                 });
                 dungeonTimeouts[roomID] = setTimeout(dungeonCountdownTimeoutCall, 5000);
@@ -252,7 +266,7 @@ io.on('connection', function (socket) {
     socket.on('newEvent', function (data) {
         jsonfile.readFile(getRoomFileName(roomID), function (err, roomData) {
             // Loop through everyone and emit event
-            roomData.players.forEach(function (player) {
+            players.forEach(function (player) {
                 socket.broadcast.to(player.socketID).emit('newEvent', data);
             });
         });
