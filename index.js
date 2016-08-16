@@ -2,6 +2,9 @@ var app = require('express')();
 var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var jsonfile = require('jsonfile');
+
+var port = process.env.PORT || 8080;
+
 var rooms = [];
 var dungeonTimeouts = [];
 
@@ -40,8 +43,8 @@ function checkRoom(roomID) {
 }
 
 // Server start
-server.listen(8080, function () {
-    console.log("Server is now running...");
+server.listen(port, function () {
+    console.log("Server is now running on port " + port);
 });
 
 // Individual player connection
