@@ -99,8 +99,8 @@ io.on('connection', function (socket) {
         if (rooms[data.roomID]) {
             // Add player to room (event "joinedRoom" is emitted in joinRoom() call)
             jsonfile.readFile(getRoomFileName(data.roomID), function (err, roomData) {
-                // If players in room are over max
-                if (roomData.players.length >= 4) {
+                // If players in room are over max or in dungeon
+                if (roomData.players.length >= 4 || roomData.inDungeon) {
                     socket.emit('failedJoinRoom');
                 } else if (roomData.password == data.password) {
                     // Check password
@@ -144,80 +144,85 @@ io.on('connection', function (socket) {
         ack(true);
         // Go to room and change ready
         jsonfile.readFile(getRoomFileName(playerData.room), function (err, data) {
-            data.players.forEach(function (player) {
-                // If this is the player that readied, change the data
-                if (player.id == playerData.playerID) {
-                    player.isReady = playerData.ready;
+            if (data.players != null) {
+                data.players.forEach(function (player) {
+                    // If this is the player that readied, change the data
+                    if (player.id == playerData.playerID) {
+                        player.isReady = playerData.ready;
+                    }
+                    // Broadcast to room that someone readied
+                    socket.broadcast.to(player.socketID).emit('readyChanged', playerData);
+                });
+
+                var readies = 0;
+                data.players.forEach(function (player) {
                     if (player.isReady) {
-                        data.ready = data.ready + 1;
-                    } else {
-                        data.ready = data.ready - 1;
-                    }
-                }
-                // Broadcast to room that someone readied
-                socket.broadcast.to(player.socketID).emit('readyChanged', playerData);
-            });
-
-            // After player readies have all been set, check to see if enough
-            //  players are ready. If so, emit sendToDungeon to all players
-            if (data.ready == data.players.length) {
-                console.log("*** JOINING DUNGEON ***");
-
-                /*******************************************************************************/
-                /******************************Creating Random MID******************************/
-                var tier = 0;
-                var monsterID = 0;
-                data.players.forEach(function (player) {
-                    if (player.stats.floor > tier)
-                        tier = player.stats.floor;
-                });
-                tier = Math.ceil(tier / 5);
-
-                // choose random tier
-                if (tier != 5 && tier != 0)
-                    tier = getRandomInt(1, tier);
-                if (tier > 5)
-                    tier = 5;
-
-                switch (tier) {
-                    case 0:
-                        monsterID = 0;
-                        break;
-                    case 1:
-                    case 2:
-                    case 3:
-                        monsterID = getRandomInt(0, 10);
-                        break;
-                    case 4:
-                        monsterID = getRandomInt(0, 8);
-                        break;
-                    case 5:
-                        monsterID = getRandomInt(0, 6);
-                        break;
-                    default:
-                        monsterID = getRandomInt(0, 5);
-                        break;
-                }
-
-
-                /*******************************************************************************/
-
-                data.players.forEach(function (player) {
-                    if (playerData.playerID == player.id) {
-                        socket.emit('startDungeonCountdown', {
-                            monsterID: monsterID,
-                            monsterTier: tier
-                        });
-                    } else {
-                        socket.broadcast.to(player.socketID).emit('startDungeonCountdown', {
-                            monsterID: monsterID,
-                            monsterTier: tier
-                        });
+                        readies++;
                     }
                 });
-                dungeonTimeouts[roomID] = setTimeout(dungeonCountdownTimeoutCall, 5000);
+                data.ready = readies;
+
+                // After player readies have all been set, check to see if enough
+                //  players are ready. If so, emit sendToDungeon to all players
+                if (data.ready == data.players.length) {
+                    console.log("*** JOINING DUNGEON ***");
+
+                    /*******************************************************************************/
+                    /******************************Creating Random MID******************************/
+                    var tier = 0;
+                    var monsterID = 0;
+                    data.players.forEach(function (player) {
+                        if (player.stats.floor > tier)
+                            tier = player.stats.floor;
+                    });
+                    tier = Math.ceil(tier / 5);
+
+                    // choose random tier
+                    if (tier != 5 && tier != 0)
+                        tier = getRandomInt(1, tier);
+                    if (tier > 5)
+                        tier = 5;
+
+                    switch (tier) {
+                        case 0:
+                            monsterID = 0;
+                            break;
+                        case 1:
+                        case 2:
+                        case 3:
+                            monsterID = getRandomInt(0, 10);
+                            break;
+                        case 4:
+                            monsterID = getRandomInt(0, 8);
+                            break;
+                        case 5:
+                            monsterID = getRandomInt(0, 6);
+                            break;
+                        default:
+                            monsterID = getRandomInt(0, 5);
+                            break;
+                    }
+
+
+                    /*******************************************************************************/
+
+                    data.players.forEach(function (player) {
+                        if (playerData.playerID == player.id) {
+                            socket.emit('startDungeonCountdown', {
+                                monsterID: monsterID,
+                                monsterTier: tier
+                            });
+                        } else {
+                            socket.broadcast.to(player.socketID).emit('startDungeonCountdown', {
+                                monsterID: monsterID,
+                                monsterTier: tier
+                            });
+                        }
+                    });
+                    dungeonTimeouts[roomID] = setTimeout(dungeonCountdownTimeoutCall, 5000);
+                }
+                writeFile(roomID, data);
             }
-            writeFile(roomID, data);
         });
     });
 
@@ -226,7 +231,9 @@ io.on('connection', function (socket) {
             roomData.inDungeon = true;
             roomData.players.forEach(function (player) {
                 socket.broadcast.to(player.socketID).emit("enterDungeon");
+                player.isReady = false;
             });
+            roomData.ready = 0;
             socket.emit("enterDungeon");
             writeFile(roomID, roomData);
         });
@@ -269,6 +276,30 @@ io.on('connection', function (socket) {
             players.forEach(function (player) {
                 socket.broadcast.to(player.socketID).emit('newEvent', data);
             });
+        });
+    });
+
+    socket.on('flee', function () {
+        var tmpRoomID = roomID;
+        roomID = -1;
+        jsonfile.readFile(getRoomFileName(tmpRoomID), function (err, data) {
+            var counter = 0;
+            data.players.forEach(function (player) {
+                if (player.socketID == socket.id) {
+                    data.players.splice(counter, 1);
+                } else {
+                    counter++;
+                }
+            });
+            data.players.forEach(function (player) {
+                socket.broadcast.to(player.socketID).emit("syncServerCharacters");
+            });
+            // If no players left in room, set room from occupied to free
+            if (data.players.length == 0) {
+                rooms[tmpRoomID] = false;
+            }
+            console.log(data);
+            writeFile(tmpRoomID, data);
         });
     });
 
@@ -322,10 +353,8 @@ io.on('connection', function (socket) {
             console.log("Someone left room " + roomID);
             console.log("Player Disconnected");
         }
-    })
-    ;
-})
-;
+    });
+});
 
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
