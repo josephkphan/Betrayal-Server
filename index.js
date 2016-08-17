@@ -321,14 +321,8 @@ io.on('connection', function (socket) {
                         socket.broadcast.to(player.socketID).emit("playerLeftRoomInLobby", {character: charThatLeft});
                     });
                 } else { // If disconnected in dungeon
-                    var playa;
                     rooms[roomID].players.forEach(function (player) {
-                        if (player.socketID == socket.id) {
-                            playa = player;
-                        }
-                    });
-                    rooms[roomID].players.forEach(function (player) {
-                        socket.broadcast.to(player.socketID).emit("disconnectInDungeon", {player: playa});
+                        socket.broadcast.to(player.socketID).emit("disconnectInDungeon", {player: charThatLeft});
                     });
                 }
             }
