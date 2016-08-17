@@ -185,15 +185,19 @@ io.on('connection', function (socket) {
                         monsterID = 0;
                         break;
                     case 1:
+                        monsterID = getRandomInt(0, 9);
+                        break;
                     case 2:
+                        monsterID = getRandomInt(0, 9);
+                        break;
                     case 3:
-                        monsterID = getRandomInt(0, 10);
+                        monsterID = getRandomInt(0, 9);
                         break;
                     case 4:
-                        monsterID = getRandomInt(0, 8);
+                        monsterID = getRandomInt(0, 7);
                         break;
                     case 5:
-                        monsterID = getRandomInt(0, 6);
+                        monsterID = getRandomInt(0, 5);
                         break;
                     default:
                         monsterID = getRandomInt(0, 5);
