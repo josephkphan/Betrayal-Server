@@ -17,7 +17,7 @@ roomLength = maxRooms;
 
 setInterval(function() {
     console.log(rooms);
-}, 5000);
+}, 1000);
 
 // Scan for dead connections every hour (3600000 milliseconds)
 setInterval(function () {
@@ -257,6 +257,10 @@ io.on('connection', function (socket) {
         });
     });
 
+    socket.on('dungeonEnded', function() {
+        rooms[roomID].inDungeon = false;
+    });
+
     socket.on('flee', function () {
         var tmpRoomID = roomID;
         roomID = -1;
@@ -275,7 +279,7 @@ io.on('connection', function (socket) {
             rooms[tmpRoomID] = false;
         }
         rooms[tmpRoomID].players.forEach(function(player) {
-            socket.broadcast.to(player.socketID).emit("removeCharacter", {player: player});
+            socket.broadcast.to(player.socketID).emit("removeCharacter", {player: charRemoved});
         });
         console.log(rooms[tmpRoomID]);
     });
