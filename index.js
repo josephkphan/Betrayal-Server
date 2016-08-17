@@ -167,7 +167,7 @@ io.on('connection', function (socket) {
 
                 // After player readies have all been set, check to see if enough
                 //  players are ready. If so, emit sendToDungeon to all players
-                if (data.ready == data.players.length) {
+                if (data.ready == data.players.length && data.players.length > 1) {
                     console.log("*** JOINING DUNGEON ***");
 
                     /*******************************************************************************/
