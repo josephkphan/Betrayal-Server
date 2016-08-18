@@ -15,7 +15,7 @@ for (var i = 0; i < maxRooms; i++) {
 }
 roomLength = maxRooms;
 
-setInterval(function() {
+setInterval(function () {
     console.log(rooms);
 }, 1000);
 
@@ -175,8 +175,12 @@ io.on('connection', function (socket) {
                 tier = Math.ceil(tier / 5);
 
                 // choose random tier
-                if (tier != 5 && tier != 0)
-                    tier = getRandomInt(1, tier);
+                if (tier != 5 && tier != 0) {
+                    var chance = getRandomInt(1, 100);
+                    if (chance <= 25) {
+                        tier--;
+                    }
+                }
                 if (tier > 5)
                     tier = 5;
 
@@ -261,7 +265,7 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('dungeonEnded', function() {
+    socket.on('dungeonEnded', function () {
         rooms[roomID].inDungeon = false;
     });
 
@@ -282,7 +286,7 @@ io.on('connection', function (socket) {
         if (rooms[tmpRoomID].players.length == 0) {
             rooms[tmpRoomID] = false;
         }
-        rooms[tmpRoomID].players.forEach(function(player) {
+        rooms[tmpRoomID].players.forEach(function (player) {
             socket.broadcast.to(player.socketID).emit("removeCharacter", {player: charRemoved});
         });
         console.log(rooms[tmpRoomID]);
