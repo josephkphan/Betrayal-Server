@@ -175,7 +175,7 @@ io.on('connection', function (socket) {
                 tier = Math.ceil(tier / 5);
 
                 // choose random tier
-                if (tier != 5 && tier != 0) {
+                if (tier != 5 && tier != 0 && tier != 1) {
                     var chance = getRandomInt(1, 100);
                     if (chance <= 25) {
                         tier--;
