@@ -27,7 +27,7 @@ setInterval(function () {
             checkRoom(j);
         }
     }
-}, 10000);
+}, 3600000);
 
 function checkRoom(roomID) {
     if (rooms[roomID].players.length > 0) {
@@ -197,8 +197,8 @@ io.on('connection', function (socket) {
                         monsterID = getRandomInt(0, 9);
                         break;
                     case 3:
-                        //monsterID = 8;
-                        monsterID = getRandomInt(0, 9);
+                        monsterID = 8;
+                        //monsterID = getRandomInt(0, 9);
                         break;
                     case 4:
                         monsterID = getRandomInt(0, 7);
