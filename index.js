@@ -27,7 +27,7 @@ setInterval(function () {
             checkRoom(j);
         }
     }
-}, 3600000);
+}, 10000);
 
 function checkRoom(roomID) {
     if (rooms[roomID].players.length > 0) {
@@ -80,7 +80,8 @@ io.on('connection', function (socket) {
             password: data.password,
             players: [data.character],
             ready: 0,
-            inDungeon: false
+            inDungeon: false,
+            enteringDungeon: false
         };
 
         // Emit room id
@@ -163,6 +164,7 @@ io.on('connection', function (socket) {
             //  players are ready. If so, emit sendToDungeon to all players
             if (rooms[roomID].ready == rooms[roomID].players.length && rooms[roomID].players.length > 1) {
                 console.log("*** JOINING DUNGEON ***");
+                rooms[roomID].enteringDungeon = true;
 
                 /*******************************************************************************/
                 /******************************Creating Random MID******************************/
@@ -225,6 +227,13 @@ io.on('connection', function (socket) {
                     }
                 });
                 dungeonTimeouts[roomID] = setTimeout(dungeonCountdownTimeoutCall, 5000);
+            } else if (rooms[roomID].enteringDungeon) {
+                cancelDungeonCountdown(roomID, false);
+                rooms[roomID].players.forEach(function (player) {
+                    socket.broadcast.to(player.socketID).emit("stopDungeonCountdown");
+                });
+                socket.emit("stopDungeonCountdown");
+                rooms[roomID].enteringDungeon = false;
             }
         }
     });
@@ -298,6 +307,7 @@ io.on('connection', function (socket) {
             var counter = 0;
             var charThatLeft;
 
+            // Remove player first, store removed player in charThatLeft
             rooms[roomID].players.forEach(function (player) {
                 if (player.socketID == socket.id) {
                     charThatLeft = player;
@@ -313,14 +323,7 @@ io.on('connection', function (socket) {
             } else {
                 // Emit to all players in the room that someone left
                 if (!rooms[roomID].inDungeon) {
-                    if (dungeonTimeouts[roomID] != null && !dungeonTimeouts[roomID]._called) {
-                        clearTimeout(dungeonTimeouts[roomID]);
-                        // unready everyone
-                        rooms[roomID].players.forEach(function (player) {
-                            player.isReady = false;
-                        });
-                        rooms[roomID].ready = 0;
-                    }
+                    cancelDungeonCountdown(roomID, true);
                     rooms[roomID].players.forEach(function (player) {
                         socket.broadcast.to(player.socketID).emit("playerLeftRoomInLobby", {character: charThatLeft});
                     });
@@ -360,6 +363,19 @@ function areAllRoomsOccupied() {
         }
     }
     return true;
+}
+
+function cancelDungeonCountdown(roomID, unreadyAll) {
+    if (dungeonTimeouts[roomID] != null && !dungeonTimeouts[roomID]._called) {
+        clearTimeout(dungeonTimeouts[roomID]);
+        // unready everyone
+        if (unreadyAll) {
+            rooms[roomID].players.forEach(function (player) {
+                player.isReady = false;
+            });
+            rooms[roomID].ready = 0;
+        }
+    }
 }
 
 // Method for debugging
