@@ -8,16 +8,13 @@ var maxRooms = 10;
 var roomLength = 0;
 var rooms = {};
 var dungeonTimeouts = {};
+var version = 1;
 
 // Initialize rooms
 for (var i = 0; i < maxRooms; i++) {
     rooms[i] = false;
 }
 roomLength = maxRooms;
-
-setInterval(function () {
-    console.log(rooms);
-}, 1000);
 
 // Scan for dead connections every hour (3600000 milliseconds)
 setInterval(function () {
@@ -59,76 +56,86 @@ io.on('connection', function (socket) {
 
     // Create a room
     socket.on('createRoom', function (data) {
-        var roomNum;
-        do {
-            if (areAllRoomsOccupied()) {
-                for (var i = length; i < length + maxRooms; i++) {
-                    rooms[i] = false;
+        if (data.appVersion == version) {
+            var roomNum;
+            do {
+                if (areAllRoomsOccupied()) {
+                    for (var i = length; i < length + maxRooms; i++) {
+                        rooms[i] = false;
+                    }
                 }
-            }
 
-            // Create random room number
-            roomNum = getRandomIntExclusive(0, roomLength - 1) + 1;
-            console.log(roomNum);
-        } while (rooms[roomNum]);
+                // Create random room number
+                roomNum = getRandomIntExclusive(0, roomLength - 1) + 1;
+                console.log(roomNum);
+            } while (rooms[roomNum]);
 
-        // Add socket id to player and then create room
-        data.character.socketID = socket.id;
+            // Add socket id to player and then create room
+            data.character.socketID = socket.id;
 
-        // Persist player in room's json file
-        rooms[roomNum] = {
-            password: data.password,
-            players: [data.character],
-            ready: 0,
-            inDungeon: false,
-            enteringDungeon: false
-        };
+            // Persist player in room's json file
+            rooms[roomNum] = {
+                password: data.password,
+                players: [data.character],
+                ready: 0,
+                inDungeon: false,
+                enteringDungeon: false
+            };
 
-        // Emit room id
-        socket.emit('roomCreated', {roomID: roomNum});
+            // Emit room id
+            socket.emit('roomCreated', {roomID: roomNum});
 
-        // Set socket instance variables
-        roomID = roomNum;
+            // Set socket instance variables
+            roomID = roomNum;
 
-        console.log("Someone created and joined room " + roomID);
+            console.log("Someone created and joined room " + roomID);
+        } else {
+            socket.emit('gameNotUpdated');
+            socket.disconnect();
+        }
     });
 
     // Join room
     socket.on('joinRoom', function (data) {
-        // Add socket id to player
-        data.character.socketID = socket.id;
+        if (data.appVersion == version) {
+            // Add socket id to player
+            data.character.socketID = socket.id;
 
-        if (rooms[data.roomID]) {
-            // Add player to room (event "joinedRoom" is emitted in joinRoom() call)
-            // If players in room are over max or in dungeon
-            if (rooms[data.roomID].players.length >= 4 || rooms[data.roomID].inDungeon) {
-                socket.emit('failedJoinRoom');
-            } else if (rooms[data.roomID].password == data.password) {
-                // Check password
-                rooms[data.roomID].players.push(data.character);
+            if (rooms[data.roomID]) {
+                // Add player to room (event "joinedRoom" is emitted in joinRoom() call)
+                // If players in room are over max or in dungeon
+                if (rooms[data.roomID].players.length >= 4 || rooms[data.roomID].inDungeon) {
+                    socket.emit('failedJoinRoom');
+                } else if (rooms[data.roomID].password == data.password) {
+                    // Check password
+                    rooms[data.roomID].players.push(data.character);
 
-                // Broadcast to other players in the room the updated players list
-                rooms[data.roomID].players.forEach(function (player) {
-                    socket.broadcast.to(player.socketID).emit('joinedRoom', {
+                    // Broadcast to other players in the room the updated players list
+                    rooms[data.roomID].players.forEach(function (player) {
+                        socket.broadcast.to(player.socketID).emit('joinedRoom', {
+                            players: rooms[data.roomID].players,
+                            roomID: data.roomID
+                        });
+                    });
+
+                    // Update the current player because the original socket doesn't get called above
+                    socket.emit('joinedRoom', {
                         players: rooms[data.roomID].players,
                         roomID: data.roomID
                     });
-                });
 
-                // Update the current player because the original socket doesn't get called above
-                socket.emit('joinedRoom', {
-                    players: rooms[data.roomID].players,
-                    roomID: data.roomID
-                });
-
-                // Set client instance variables
-                roomID = data.roomID;
+                    // Set client instance variables
+                    roomID = data.roomID;
+                } else {
+                    // Wrong password
+                    socket.emit('failedJoinRoom');
+                }
             } else {
-                // Wrong password
-                socket.emit('failedJoinRoom');
+                socket.emit("roomNull");
             }
         } else {
-            socket.emit("roomNull");
+            socket.emit('gameNotUpdated');
+            socket.disconnect();
         }
     });
 
@@ -197,8 +204,7 @@ io.on('connection', function (socket) {
                         monsterID = getRandomInt(0, 9);
                         break;
                     case 3:
-                        monsterID = 8;
-                        //monsterID = getRandomInt(0, 9);
+                        monsterID = getRandomInt(0, 9);
                         break;
                     case 4:
                         monsterID = getRandomInt(0, 7);
