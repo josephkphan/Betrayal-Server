@@ -16,7 +16,7 @@ for (var i = 0; i < maxRooms; i++) {
 }
 roomLength = maxRooms;
 
-// Scan for dead connections every hour (3600000 milliseconds)
+// Scan for dead connections every hour (600000 milliseconds)
 setInterval(function () {
     var j = 0;
     for (j = 0; j < rooms.length - 1; j++) {
@@ -24,7 +24,7 @@ setInterval(function () {
             checkRoom(j);
         }
     }
-}, 3600000);
+}, 600000);
 
 function checkRoom(roomID) {
     if (rooms[roomID].players.length > 0) {
@@ -56,6 +56,7 @@ io.on('connection', function (socket) {
 
     // Create a room
     socket.on('createRoom', function (data) {
+        console.log("Player requesting to create room...");
         if (data.appVersion == version) {
             var roomNum;
             do {
@@ -69,6 +70,8 @@ io.on('connection', function (socket) {
                 roomNum = getRandomIntExclusive(0, roomLength - 1) + 1;
                 console.log(roomNum);
             } while (rooms[roomNum]);
+
+            console.log("Creating room " + roomNum);
 
             // Add socket id to player and then create room
             data.character.socketID = socket.id;
@@ -87,8 +90,6 @@ io.on('connection', function (socket) {
 
             // Set socket instance variables
             roomID = roomNum;
-
-            console.log("Someone created and joined room " + roomID);
         } else {
             socket.emit('gameNotUpdated');
             socket.disconnect();
@@ -97,6 +98,7 @@ io.on('connection', function (socket) {
 
     // Join room
     socket.on('joinRoom', function (data) {
+        console.log("Player requesting to join room " + data.roomID + "...");
         if (data.appVersion == version) {
             // Add socket id to player
             data.character.socketID = socket.id;
@@ -126,6 +128,7 @@ io.on('connection', function (socket) {
 
                     // Set client instance variables
                     roomID = data.roomID;
+                    console.log("Join room successful!");
                 } else {
                     // Wrong password
                     socket.emit('failedJoinRoom');
