@@ -18,6 +18,7 @@ roomLength = maxRooms;
 
 // Scan for dead connections every hour (600000 milliseconds)
 setInterval(function () {
+    console.log("Sweeping dead connections...");
     var j = 0;
     for (j = 0; j < rooms.length - 1; j++) {
         if (rooms[j]) {
@@ -37,6 +38,7 @@ function checkRoom(roomID) {
                 if (rooms[roomID].players.length == 0) {
                     rooms[roomID] = false;
                 }
+                console.log("Removed connection.");
             }
         })
     }
