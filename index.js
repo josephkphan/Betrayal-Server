@@ -8,7 +8,7 @@ var maxRooms = 10;
 var roomLength = 0;
 var rooms = {};
 var dungeonTimeouts = {};
-var version = 1;
+var version = 2;
 
 // Initialize rooms
 for (var i = 0; i < maxRooms; i++) {
